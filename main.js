@@ -12,7 +12,7 @@ const networkCtx = networkCanvas.getContext("2d");
 
 const road = new Road(carCanvas.width / 2, carCanvas.width * 0.9, 3);
 
-const mainMaxSpeed = 50;
+const mainMaxSpeed = 12;
 const N = 500;
 const cars = generateCars(N);
 let bestCar = cars[0];
