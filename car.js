@@ -1,5 +1,5 @@
 class Car {
-  constructor(x, y, width, height) {
+  constructor(x, y, width, height, controlType, maxSpeed) {
     this.x = x;
     this.y = y;
     this.width = width;
@@ -7,28 +7,51 @@ class Car {
 
     this.speed = 0;
     this.acceleration = 1;
-    this.maxSpeed = 20;
+    this.maxSpeed = maxSpeed;
     this.friction = 0.1;
     this.angle = 0;
     this.damaged = false;
-    this.turnSpeed = 0.03;
+    this.turnSpeed = 0.05;
 
-    this.sensors = new Sensor(this);
-    this.controls = new Controls();
+    this.useBrain = controlType === "AI";
+
+    if (controlType !== "DUMMY") {
+      this.sensors = new Sensor(this);
+      this.brain = new NeuralNetwork([this.sensors.rayCount, 6, 4]);
+    }
+    this.controls = new Controls(controlType);
   }
 
-  update(roadBorders) {
+  update(roadBorders, traffic) {
     if (!this.damaged) {
       this.#move();
       this.polygon = this.#createPolygon();
-      this.damaged = this.#assessDamage(roadBorders);
+      this.damaged = this.#assessDamage(roadBorders, traffic);
     }
-    this.sensors.update(roadBorders);
+    if (this.sensors) {
+      this.sensors.update(roadBorders, traffic);
+      const offsets = this.sensors.readings.map((s) =>
+        s === null ? 0 : 1 - s.offset
+      );
+      const outputs = NeuralNetwork.feedForward(offsets, this.brain);
+
+      if (this.useBrain) {
+        this.controls.forward = outputs[0];
+        this.controls.left = outputs[1];
+        this.controls.right = outputs[2];
+        this.controls.reverse = outputs[3];
+      }
+    }
   }
 
-  #assessDamage(roadBorders) {
+  #assessDamage(roadBorders, traffic) {
     for (let i = 0; i < roadBorders.length; i++) {
       if (polyIntersect(this.polygon, roadBorders[i])) {
+        return true;
+      }
+    }
+    for (let i = 0; i < traffic.length; i++) {
+      if (polyIntersect(this.polygon, traffic[i].polygon)) {
         return true;
       }
     }
@@ -99,11 +122,11 @@ class Car {
     this.y -= Math.cos(this.angle) * this.speed;
   }
 
-  draw(ctx) {
+  draw(ctx, color, drawSensor = false) {
     if (this.damaged) {
       ctx.fillStyle = "gray";
     } else {
-      ctx.fillStyle = "black";
+      ctx.fillStyle = color;
     }
     if (this.polygon) {
       ctx.beginPath();
@@ -113,7 +136,7 @@ class Car {
         ctx.lineTo(this.polygon[i].x, this.polygon[i].y);
       }
       ctx.fill();
-      this.sensors.draw(ctx);
+      this.sensors && drawSensor && this.sensors.draw(ctx);
     }
   }
 }
